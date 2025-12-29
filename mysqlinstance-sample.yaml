@@ -1,0 +1,22 @@
+apiVersion: testcraft.com/v1
+kind: MySQLInstance
+metadata:
+  name: sample-mysql
+spec:
+  image:
+    registry: docker.io
+    imageName: library/mysql
+    tag: "8.0"
+  port: 3306
+  database: testcraft
+  rootPassword: rootpassword
+  resources:
+    limits:
+      cpu: "2"
+      memory: "1Gi"
+  storage:
+    size: "10Gi"
+  mysqlConfig:
+    max_connections: "500"
+    slow_query_log: "ON"
+  initStrategy: EMPTY

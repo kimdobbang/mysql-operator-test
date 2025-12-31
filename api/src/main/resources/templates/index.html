@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MySQL Operator Demo</title>
+    <style>
+      :root {
+        --bg: #0f1417;
+        --panel: #1a2329;
+        --accent: #f0b429;
+        --text: #e6edf3;
+        --muted: #9fb0ba;
+        --line: #2b3942;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #1f2b33, #0f1417 60%);
+        color: var(--text);
+        padding: 32px 20px 48px;
+      }
+
+      .container {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+
+      header {
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        font-size: 32px;
+        margin: 0 0 8px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        margin: 0;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        height: 100%;
+      }
+      .stack .card {
+        flex: 1;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+      }
+
+      .card h2 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      input,
+      select {
+        background: #0d1114;
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 14px;
+      }
+
+      button {
+        background: var(--accent);
+        color: #0b0f12;
+        border: none;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--text);
+      }
+
+      .status {
+        background: #0d1114;
+        border-radius: 12px;
+        padding: 12px;
+        border: 1px dashed var(--line);
+        font-size: 14px;
+      }
+
+      .status span {
+        color: var(--muted);
+      }
+
+      .message {
+        margin-top: 8px;
+        color: var(--accent);
+      }
+
+      .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        background: #11181d;
+        border: 1px solid var(--line);
+        color: var(--text);
+        padding: 12px 16px;
+        border-radius: 12px;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all 0.25s ease;
+        pointer-events: none;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .status-success {
+        color: #1b7f3a;
+      }
+      .status-failed {
+        color: #c1121f;
+      }
+      .status-running {
+        color: #ffffff;
+      }
+      .status-time {
+        color: #ffffff;
+        font-size: 11px;
+        margin-left: 6px;
+        opacity: 0.85;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 8px 6px;
+        border-bottom: 1px solid var(--line);
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid var(--line);
+        margin: 12px 0;
+      }
+      .verify-summary {
+        display: grid;
+        gap: 6px;
+        font-size: 14px;
+      }
+      .verify-message {
+        margin-top: 8px;
+        color: #f4c45a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>K8S Operator Demo</h1>
+        <p class="subtitle">
+          MySQL 만 PoC 중 ... - Create, tune, clone, and reset MySQL via a simple demo.
+        </p>
+      </header>
+
+      <div class="card">
+        <h2>Current Status</h2>
+        <div class="status">
+          <div><span>Name:</span> <strong th:text="${name}">mysql-demo</strong></div>
+          <div><span>Namespace:</span> <strong th:text="${namespace}">default</strong></div>
+          <div>
+            <span>CPU (limits/requests):</span>
+            <strong th:text="${spec != null ? (spec.resources.limits.cpu ?: '-') + ' / ' + (spec.resources.requests != null ? (spec.resources.requests.cpu ?: '-') : '-') : 'N/A'}">N/A</strong>
+          </div>
+          <div>
+            <span>Memory (limits/requests):</span>
+            <strong th:text="${spec != null ? (spec.resources.limits.memory ?: '-') + ' / ' + (spec.resources.requests != null ? (spec.resources.requests.memory ?: '-') : '-') : 'N/A'}">N/A</strong>
+          </div>
+          <div>
+            <span>Storage:</span>
+            <strong th:text="${spec != null ? spec.storage.size : 'N/A'}">N/A</strong>
+          </div>
+          <div th:with="sts=${currentStatefulSet}">
+            <span>Replicas:</span>
+            <strong
+              th:text="${sts != null ? (sts.status.readyReplicas ?: 0) + '/' + (sts.spec.replicas ?: 0) : (spec != null ? '0/' + spec.replicas : 'N/A')}"
+            >N/A</strong>
+          </div>
+          <div>
+            <span>Clone Source:</span>
+            <strong th:text="${spec != null && spec.cloneSource != null ? spec.cloneSource.host + ':' + spec.cloneSource.port + ' / ' + spec.cloneSource.database : 'N/A'}">N/A</strong>
+          </div>
+          <div>
+            <span>Phase:</span>
+            <strong th:text="${status != null ? status.phase : 'N/A'}">N/A</strong>
+            <span
+              class="status-time"
+              th:if="${status != null && status.lastPhaseTime != null}"
+              th:text="${'(' + #temporals.format(status.lastPhaseTime, 'yyyy-MM-dd HH:mm') + ')'}"
+            ></span>
+          </div>
+          <div>
+            <span>Message:</span>
+            <strong th:text="${status != null ? status.message : 'N/A'}">N/A</strong>
+          </div>
+          <div>
+            <span>Clone:</span>
+            <strong
+              th:text="${status != null && status.clonePhase != null ? status.clonePhase : 'N/A'}"
+              th:classappend="${status != null && status.clonePhase == 'SUCCESS' ? 'status-success' : (status != null && status.clonePhase == 'FAILED' ? 'status-failed' : (status != null && status.clonePhase == 'RUNNING' ? 'status-running' : ''))}"
+            >N/A</strong>
+            <span
+              class="status-time"
+              th:if="${status != null && (status.clonePhase == 'SUCCESS' || status.clonePhase == 'FAILED') && status.lastCloneTime != null}"
+              th:text="${'(' + #temporals.format(status.lastCloneTime, 'yyyy-MM-dd HH:mm') + ')'}"
+            ></span>
+          </div>
+          <div>
+            <span>Reset:</span>
+            <strong
+              th:text="${status != null && status.resetPhase != null ? status.resetPhase : 'N/A'}"
+              th:classappend="${status != null && status.resetPhase == 'SUCCESS' ? 'status-success' : (status != null && status.resetPhase == 'FAILED' ? 'status-failed' : (status != null && status.resetPhase == 'RUNNING' ? 'status-running' : ''))}"
+            >N/A</strong>
+            <span
+              class="status-time"
+              th:if="${status != null && (status.resetPhase == 'SUCCESS' || status.resetPhase == 'FAILED') && status.lastResetTime != null}"
+              th:text="${'(' + #temporals.format(status.lastResetTime, 'yyyy-MM-dd HH:mm') + ')'}"
+            ></span>
+          </div>
+          <div class="message" th:text="${message}"></div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top: 20px;">
+        <form class="card" method="post" action="/ui/create">
+          <h2>Create / Replace</h2>
+          <div class="field">
+            <label>Instance Name</label>
+            <input name="name" th:value="${name}" />
+          </div>
+          <div class="field">
+            <label>Replicas</label>
+            <input name="replicas" type="number" min="1" th:value="${spec != null ? spec.replicas : 1}" />
+          </div>
+          <div class="field">
+            <label>Namespace</label>
+            <input name="namespace" th:value="${namespace}" />
+          </div>
+          <div class="field">
+            <label>CPU Limit</label>
+            <input name="cpu" placeholder="500m" />
+          </div>
+          <div class="field">
+            <label>Memory Limit</label>
+            <input name="memory" placeholder="512Mi" />
+          </div>
+          <div class="field">
+            <label>Storage Size</label>
+            <input name="storage" placeholder="1Gi" />
+          </div>
+          <p class="subtitle">
+            Storage 축소는 지원되지 않습니다. 확장은 스토리지클래스 설정에 따라 적용됩니다.
+          </p>
+          <div class="field">
+            <label>Image Tag</label>
+            <input name="imageTag" placeholder="8.0" />
+          </div>
+          <button type="submit">Apply</button>
+        </form>
+
+        <div class="stack">
+          <div class="card">
+            <h2>Actions</h2>
+            <form method="post" action="/ui/restart">
+              <input type="hidden" name="name" th:value="${name}" />
+              <input type="hidden" name="namespace" th:value="${namespace}" />
+              <button type="submit">Restart</button>
+            </form>
+            <form method="post" action="/ui/reset" style="margin-top: 8px;">
+              <input type="hidden" name="name" th:value="${name}" />
+              <input type="hidden" name="namespace" th:value="${namespace}" />
+              <input type="hidden" name="action" value="truncate" />
+              <button type="submit" class="secondary">Reset (drop DB)</button>
+            </form>
+            <form method="post" action="/ui/reset" style="margin-top: 8px;">
+              <input type="hidden" name="name" th:value="${name}" />
+              <input type="hidden" name="namespace" th:value="${namespace}" />
+              <input type="hidden" name="action" value="delete" />
+              <button type="submit" class="secondary">Delete Instance</button>
+            </form>
+          </div>
+
+          <form class="card" method="post" action="/ui/verify">
+            <h2>Verify Data</h2>
+            <input type="hidden" name="name" th:value="${name}" />
+            <input type="hidden" name="namespace" th:value="${namespace}" />
+            <div class="field">
+              <label>Database</label>
+              <input name="database" value="testcraft" />
+            </div>
+            <div class="field">
+              <label>Table</label>
+              <input name="table" value="users" />
+            </div>
+            <button type="submit">Run Verify</button>
+          </form>
+        </div>
+
+        <form class="card" method="post" action="/ui/clone">
+          <h2>Clone</h2>
+          <input type="hidden" name="name" th:value="${name}" />
+          <input type="hidden" name="namespace" th:value="${namespace}" />
+          <div class="field">
+            <label>Strategy</label>
+            <select name="initStrategy">
+              <option value="CLONE">CLONE (data)</option>
+              <option value="SCHEMA_CLONE">SCHEMA_CLONE</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Source Host</label>
+            <input name="sourceHost" value="source-mysql" />
+          </div>
+          <div class="field">
+            <label>Source Port</label>
+            <input name="sourcePort" value="3306" />
+          </div>
+          <div class="field">
+            <label>Source User</label>
+            <input name="sourceUser" value="root" />
+          </div>
+          <div class="field">
+            <label>Source Password</label>
+            <input name="sourcePassword" value="password" />
+          </div>
+          <div class="field">
+            <label>Source Database</label>
+            <input name="sourceDatabase" value="sample" />
+          </div>
+          <button type="submit">Start Clone</button>
+        </form>
+
+        <div class="card" style="grid-column: 1 / -1;">
+          <h2>Instances in Namespace</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phase</th>
+                <th>Ready</th>
+                <th>Replicas</th>
+                <th>CPU (limits/requests)</th>
+                <th>Memory (limits/requests)</th>
+                <th>Storage</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr th:each="item : ${instances}" th:with="sts=${statefulSets[item.metadata.name]}">
+                <td th:text="${item.metadata.name}">mysql-demo</td>
+                <td th:text="${item.status != null ? item.status.phase : 'N/A'}">N/A</td>
+                <td th:text="${item.status != null ? item.status.ready : 'N/A'}">N/A</td>
+                <td th:text="${sts != null ? (sts.status.readyReplicas ?: 0) + '/' + (sts.spec.replicas ?: 0) : 'N/A'}">N/A</td>
+                <td th:text="${item.spec != null ? (item.spec.resources.limits.cpu ?: '-') + ' / ' + (item.spec.resources.requests != null ? (item.spec.resources.requests.cpu ?: '-') : '-') : 'N/A'}">N/A</td>
+                <td th:text="${item.spec != null ? (item.spec.resources.limits.memory ?: '-') + ' / ' + (item.spec.resources.requests != null ? (item.spec.resources.requests.memory ?: '-') : '-') : 'N/A'}">N/A</td>
+                <td th:text="${item.spec != null ? item.spec.storage.size : 'N/A'}">N/A</td>
+                <td th:text="${item.status != null ? item.status.message : 'N/A'}">N/A</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+          <h2>Verify Output</h2>
+          <div th:if="${verifyView == null}">
+            <pre th:text="${verifyOutput}">No output yet.</pre>
+          </div>
+          <div th:if="${verifyView != null}">
+            <div class="verify-summary">
+              <div><strong>Tables</strong>: <span th:text="${verifyView.tablesText}">N/A</span></div>
+              <div><strong>Row Count</strong>: <span th:text="${verifyView.countText}">N/A</span></div>
+            </div>
+            <div class="verify-message" th:if="${verifyView.message != ''}" th:text="${verifyView.message}"></div>
+            <hr class="divider" />
+            <div th:if="${#lists.isEmpty(verifyView.headers)}">
+              <pre>No rows to display.</pre>
+            </div>
+            <div th:if="${!#lists.isEmpty(verifyView.headers)}">
+              <table>
+                <thead>
+                  <tr>
+                    <th th:each="col : ${verifyView.headers}" th:text="${col}">col</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="row : ${verifyView.rows}">
+                    <td th:each="cell : ${row}" th:text="${cell}">cell</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="grid-column: 1 / -1;">
+          <h2>Tips</h2>
+          <p><strong>Name</strong>: 현재 UI가 대상으로 보는 MySQLInstance 이름입니다.</p>
+          <p><strong>Namespace</strong>: CR이 위치한 네임스페이스입니다.</p>
+          <p><strong>CPU/Memory (limits/requests)</strong>: Pod 리소스 상한/보장을 의미합니다.</p>
+          <p><strong>Storage</strong>: PVC 요청 용량입니다.</p>
+          <p><strong>Clone Source</strong>: 복제 소스 DB의 host:port와 database 입니다.</p>
+          <p><strong>Phase</strong>: Operator가 기록한 인스턴스 전체 상태입니다.</p>
+          <p><strong>Message</strong>: 마지막 작업 요약 메시지입니다.</p>
+          <p><strong>Clone</strong>: 클론 작업 진행 상태(RUNNING/SUCCESS/FAILED)입니다.</p>
+          <p><strong>Reset</strong>: 리셋 작업 진행 상태(RUNNING/SUCCESS/FAILED)입니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" th:text="${message}"></div>
+    <script>
+      const toast = document.getElementById("toast");
+      if (toast && toast.textContent && toast.textContent.trim().length > 0) {
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2800);
+      }
+    </script>
+  </body>
+</html>

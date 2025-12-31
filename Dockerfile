@@ -2,7 +2,7 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY build/libs/mysql-operator-poc-0.0.1-SNAPSHOT.jar /app/app.jar
+COPY operator/build/libs/operator-0.0.1-SNAPSHOT.jar /app/app.jar
 
 EXPOSE 8080
 

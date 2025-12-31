@@ -9,6 +9,7 @@ import com.testcraft.mysqloperatorpoc.operator.resource.mysql.ResourceSpec
 import io.fabric8.kubernetes.api.model.Quantity
 import io.fabric8.kubernetes.api.model.ResourceRequirements
 import io.fabric8.kubernetes.api.model.ResourceRequirementsBuilder
+import io.fabric8.kubernetes.api.model.PersistentVolumeClaim
 import io.fabric8.kubernetes.api.model.apps.StatefulSet
 import io.fabric8.kubernetes.api.model.apps.StatefulSetBuilder
 import io.javaoperatorsdk.operator.api.reconciler.Context
@@ -19,11 +20,13 @@ class MySQLStatefulSet : CRUDKubernetesDependentResource<StatefulSet, MySQLInsta
     override fun desired(primary: MySQLInstance?, context: Context<MySQLInstance?>?): StatefulSet? {
         val resource = requireNotNull(primary)
         val spec = resource.spec
+        val existing = context?.getSecondaryResource(StatefulSet::class.java)?.orElse(null)
+        val existingClaims = existing?.spec?.volumeClaimTemplates?.takeIf { it.isNotEmpty() }
         val appName = resource.metadata.name
         val secretName = resource.resourceNameWithSuffix(SECRET_SUFFIX)
         val resources = buildResources(spec.resources)
 
-        return StatefulSetBuilder()
+        val builder = StatefulSetBuilder()
             .withNewMetadata()
                 .withName(resource.metadata.name)
                 .withNamespace(resource.metadata.namespace)
@@ -31,23 +34,11 @@ class MySQLStatefulSet : CRUDKubernetesDependentResource<StatefulSet, MySQLInsta
                 .withLabels<String, String>(managedLabels() + appLabels(appName))
             .endMetadata()
             .withNewSpec()
-                .withReplicas(1)
+                .withReplicas(spec.replicas)
                 .withServiceName(resource.metadata.name)
                 .withNewSelector()
                     .withMatchLabels<String, String>(appLabels(appName))
                 .endSelector()
-                .addNewVolumeClaimTemplate()
-                    .withNewMetadata()
-                        .withName(DATA_VOLUME_NAME)
-                    .endMetadata()
-                    .withNewSpec()
-                        .withAccessModes("ReadWriteOnce")
-                        .withStorageClassName(spec.storage.storageClassName)
-                        .withNewResources()
-                            .addToRequests("storage", Quantity(spec.storage.size))
-                        .endResources()
-                    .endSpec()
-                .endVolumeClaimTemplate()
                 .withNewTemplate()
                     .withNewMetadata()
                         .withLabels<String, String>(appLabels(appName))
@@ -84,6 +75,7 @@ class MySQLStatefulSet : CRUDKubernetesDependentResource<StatefulSet, MySQLInsta
                             .addNewVolumeMount()
                                 .withName(DATA_VOLUME_NAME)
                                 .withMountPath(DATA_MOUNT_PATH)
+                                .withSubPath("data")
                             .endVolumeMount()
                         .endContainer()
                         .addNewVolume()
@@ -99,7 +91,37 @@ class MySQLStatefulSet : CRUDKubernetesDependentResource<StatefulSet, MySQLInsta
                     .endSpec()
                 .endTemplate()
             .endSpec()
-            .build()
+
+        applyVolumeClaims(builder, existingClaims, spec.storage.size, spec.storage.storageClassName)
+
+        return builder.build()
+    }
+
+    private fun applyVolumeClaims(
+        builder: StatefulSetBuilder,
+        existingClaims: List<PersistentVolumeClaim>?,
+        storageSize: String,
+        storageClassName: String?,
+    ) {
+        val specBuilder = builder.editSpec()
+        if (existingClaims != null) {
+            specBuilder.withVolumeClaimTemplates(existingClaims)
+        } else {
+            specBuilder
+                .addNewVolumeClaimTemplate()
+                    .withNewMetadata()
+                        .withName(DATA_VOLUME_NAME)
+                    .endMetadata()
+                    .withNewSpec()
+                        .withAccessModes("ReadWriteOnce")
+                        .withStorageClassName(storageClassName)
+                        .withNewResources()
+                            .addToRequests("storage", Quantity(storageSize))
+                        .endResources()
+                    .endSpec()
+                .endVolumeClaimTemplate()
+        }
+        specBuilder.endSpec()
     }
 
     private fun buildResources(spec: ResourceSpec): ResourceRequirements {

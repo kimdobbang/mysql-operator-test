@@ -115,3 +115,6 @@ kubectl get pvc -n <namespace>
 ## 9. 운영 범위 요약
 - **지원**: 단일 replica, 자동 튜닝, 재시작/리셋/클론
 - **미지원**: HA 구성, 자동 ConfigMap 반영 재시작, 실제 Reset 로직
+
+## 10. API 문서
+- `docs/API_SPEC.md`

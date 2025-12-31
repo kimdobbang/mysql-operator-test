@@ -8,6 +8,7 @@ data class MySQLSpec(
         imageName = "library/mysql",
         tag = "8.0",
     ),
+    val replicas: Int = 1,
     val port: Int = 3306,
     val database: String = "testcraft",
     val rootPassword: String = "password",

@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-mysql
+  namespace: default
+spec:
+  selector:
+    app: source-mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-mysql
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: source-mysql
+  template:
+    metadata:
+      labels:
+        app: source-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+            - name: MYSQL_DATABASE
+              value: sample
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+              subPath: data
+            - name: mysql-init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: source-mysql-pvc
+        - name: mysql-init
+          configMap:
+            name: source-mysql-init
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: source-mysql-init
+  namespace: default
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS sample.users (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      name VARCHAR(50) NOT NULL,
+      email VARCHAR(100) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS sample.orders (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT NOT NULL,
+      amount DECIMAL(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_orders_user_id (user_id)
+    );
+    TRUNCATE TABLE sample.users;
+    TRUNCATE TABLE sample.orders;
+    INSERT INTO sample.users (name, email)
+    SELECT CONCAT('user', seq), CONCAT('user', seq, '@example.com')
+    FROM (
+      SELECT ROW_NUMBER() OVER (ORDER BY c1.table_name, c2.table_name) AS seq
+      FROM information_schema.columns c1
+      CROSS JOIN information_schema.columns c2
+      LIMIT 10000
+    ) t;
+    INSERT INTO sample.orders (user_id, amount)
+    SELECT ((seq - 1) % 10000) + 1, (seq % 5000) / 100
+    FROM (
+      SELECT ROW_NUMBER() OVER (ORDER BY c1.table_name, c2.table_name) AS seq
+      FROM information_schema.columns c1
+      CROSS JOIN information_schema.columns c2
+      LIMIT 10000
+    ) t;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: source-mysql-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: source-mysql-seed
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mysql-seed
+          image: mysql:8.0
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until mysqladmin ping -h source-mysql -P 3306 -uroot --silent; do
+                sleep 2
+              done
+              MYSQL_PWD=password mysql -h source-mysql -P 3306 -uroot < /seed/init.sql
+          volumeMounts:
+            - name: seed-sql
+              mountPath: /seed
+      volumes:
+        - name: seed-sql
+          configMap:
+            name: source-mysql-init

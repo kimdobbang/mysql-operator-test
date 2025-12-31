@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$ROOT_DIR"
 
-./gradlew bootJar
+./gradlew :operator:bootJar
 
 # Use minikube's Docker daemon so the image is available inside the cluster
 if command -v minikube >/dev/null 2>&1; then

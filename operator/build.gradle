@@ -1,0 +1,98 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "io.fabric8:crd-generator-api-v2:7.3.1"
+        classpath "io.fabric8:crd-generator-collector:7.3.1"
+    }
+}
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.spring'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+
+    // Spring Boot
+    implementation platform("org.springframework.boot:spring-boot-dependencies:3.3.7")
+    implementation platform("io.fabric8:kubernetes-client-bom:7.3.1")
+    implementation "org.springframework.boot:spring-boot-starter"
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation "com.mysql:mysql-connector-j:8.4.0"
+
+    // Operator SDK + K8s client
+    implementation("io.javaoperatorsdk:operator-framework-spring-boot-starter:6.3.1") {
+        exclude group: "io.fabric8", module: "kubernetes-httpclient-vertx"
+    }
+
+    // 테스트
+    testImplementation "org.springframework.boot:spring-boot-starter-test"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.register("generateCrds") {
+    description = "Generate CRDs from compiled custom resource classes"
+    group = "crd"
+
+    dependsOn(tasks.named("classes"))
+
+    doLast {
+        def sourceSet = project.extensions.getByType(org.gradle.api.tasks.SourceSetContainer)["main"]
+        def existingClassesDirs = sourceSet.output.classesDirs.files.findAll { it.exists() }
+
+        if (existingClassesDirs.isEmpty()) {
+            logger.warn("No compiled classes found. Make sure to run 'classes' task first.")
+            return
+        }
+
+        def compileClasspath = sourceSet.compileClasspath.collect { it.absolutePath }
+        def outputClasspath = existingClassesDirs.collect { it.absolutePath }
+        def fullClasspath = outputClasspath + compileClasspath
+
+        def outputDir = sourceSet.output.resourcesDir ?: project.layout.buildDirectory.dir("generated-resources").get().asFile
+        java.nio.file.Files.createDirectories(outputDir.toPath())
+
+        def collector = new io.fabric8.crd.generator.collector.CustomResourceCollector()
+            .withParentClassLoader(Thread.currentThread().contextClassLoader)
+            .withClasspathElements(fullClasspath)
+            .withFilesToScan(existingClassesDirs)
+
+        def crdClasses = collector.findCustomResourceClasses()
+
+        if (crdClasses.isEmpty()) {
+            println("No CustomResource classes found with @Group and @Version annotations.")
+            return
+        }
+
+        def crdGenerator = new io.fabric8.crdv2.generator.CRDGenerator()
+            .customResourceClasses(crdClasses)
+            .inOutputDir(outputDir)
+
+        def crdGenerationInfo = crdGenerator.detailedGenerate()
+        crdGenerationInfo.CRDDetailsPerNameAndVersion.each { crdName, versionToInfo ->
+            println("✅ Generated CRD: ${crdName}")
+            versionToInfo.each { version, info ->
+                println("   └─ ${version} -> ${info.filePath}")
+            }
+        }
+    }
+}
+
+tasks.named("classes") {
+    finalizedBy("generateCrds")
+}

@@ -129,9 +129,9 @@ class MySQLInstanceE2ETests {
         applyCrdIfPresent()
         val cr = newResource()
         val crClient = client.resources(MySQLInstance::class.java).inNamespace(namespace)
-        crClient.createOrReplace(cr)
-        crClient.createOrReplace(cr)
-        crClient.createOrReplace(cr)
+        crClient.resource(cr).createOrReplace()
+        crClient.resource(cr).createOrReplace()
+        crClient.resource(cr).createOrReplace()
 
         waitForReady()
 
@@ -152,7 +152,7 @@ class MySQLInstanceE2ETests {
     fun selfHealingRecreatesPod() {
         applyCrdIfPresent()
         val cr = newResource()
-        client.resources(MySQLInstance::class.java).inNamespace(namespace).createOrReplace(cr)
+        client.resources(MySQLInstance::class.java).inNamespace(namespace).resource(cr).createOrReplace()
         waitForReady()
 
         val podsBefore = getPods()
@@ -175,7 +175,7 @@ class MySQLInstanceE2ETests {
     fun gcDeletesResourcesOnCrDeletion() {
         applyCrdIfPresent()
         val cr = newResource()
-        client.resources(MySQLInstance::class.java).inNamespace(namespace).createOrReplace(cr)
+        client.resources(MySQLInstance::class.java).inNamespace(namespace).resource(cr).createOrReplace()
         waitForReady()
 
         client.resources(MySQLInstance::class.java).inNamespace(namespace).withName(name).delete()
@@ -198,7 +198,7 @@ class MySQLInstanceE2ETests {
         applyCrdIfPresent()
         val cr = newResource()
         val crClient = client.resources(MySQLInstance::class.java).inNamespace(namespace)
-        crClient.createOrReplace(cr)
+        crClient.resource(cr).createOrReplace()
         waitForReady()
 
         val tunedSpec = cr.spec.copy(resources = ResourceSpec(limits = ResourceQuantity(memory = "2Gi")))
@@ -207,7 +207,7 @@ class MySQLInstanceE2ETests {
             metadata.namespace = namespace
             spec = tunedSpec
         }
-        crClient.createOrReplace(patched)
+        crClient.resource(patched).createOrReplace()
 
         waitFor(
             condition = {

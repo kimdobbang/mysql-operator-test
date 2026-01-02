@@ -142,7 +142,7 @@ class MySQLInstanceExtendedE2ETests {
     fun restartAnnotationTriggersRollout() {
         val crClient = client.resources(MySQLInstance::class.java).inNamespace(namespace)
         val cr = newResource()
-        crClient.createOrReplace(cr)
+        crClient.resource(cr).createOrReplace()
 
         waitFor(
             condition = { (getStatefulSet()?.status?.readyReplicas ?: 0) >= 1 },
@@ -174,11 +174,11 @@ class MySQLInstanceExtendedE2ETests {
     }
 
     @Test
-    // Reset 테스트: 오퍼레이터가 reset annotation을 처리해 status에 기록하는지 확인
+    // Reset 테스트: 오퍼레이터가 reset annotation을 처리하고 Job 결과를 status에 반영하는지 확인
     fun resetAnnotationUpdatesStatus() {
         val crClient = client.resources(MySQLInstance::class.java).inNamespace(namespace)
         val cr = newResource()
-        crClient.createOrReplace(cr)
+        crClient.resource(cr).createOrReplace()
 
         waitFor(
             condition = { (getStatefulSet()?.status?.readyReplicas ?: 0) >= 1 },
@@ -186,12 +186,6 @@ class MySQLInstanceExtendedE2ETests {
             label = "statefulset ready"
         )
 
-        val patched = MySQLInstance().apply {
-            metadata.name = name
-            metadata.namespace = namespace
-            metadata.annotations = mapOf("action.mysql.sandbox/reset" to "truncate")
-            spec = cr.spec
-        }
         crClient.withName(name).edit { current ->
             val meta = current.metadata
             meta.annotations = mapOf("action.mysql.sandbox/reset" to "truncate")
@@ -202,7 +196,7 @@ class MySQLInstanceExtendedE2ETests {
             condition = {
                 val updated = crClient.withName(name).get()
                 val status = updated?.status
-                status?.resetPhase == "SKIPPED" && status.lastResetTime != null
+                status?.resetPhase in setOf("SUCCESS", "FAILED") && status?.lastResetTime != null
             },
             timeout = Duration.ofSeconds(timeoutSeconds),
             label = "reset status"

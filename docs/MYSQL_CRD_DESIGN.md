@@ -15,7 +15,6 @@
 - HA/멀티 레플리카 지원
 - 자동 스케일링 및 MySQL 샤딩
 - 자동 백업/복구 파이프라인
-- 실데이터 Reset 로직(현재는 상태 기록만 수행)
 
 ## 4. CRD 개요
 - **apiVersion**: `testcraft.com/v1`
@@ -72,7 +71,7 @@ Clone 수행 시 필요한 소스 정보는 `cloneSource`로 분리해 표현.
 - `spec.mysqlConfig`는 자동 튜닝 값과 병합
 - `spec.initStrategy`가 `CLONE`/`SCHEMA_CLONE`이고 `cloneSource`가 있을 때 Clone Job 생성
 - `action.mysql.sandbox/restart`는 StatefulSet 롤링 재시작을 유도
-- `action.mysql.sandbox/reset`는 PoC 범위에서 상태 기록만 수행
+- `action.mysql.sandbox/reset`는 대상 DB drop/create Job을 트리거하고 status를 갱신
 
 ## 8. 기본값과 합리적 선택
 | 필드 | 기본값 | 의도 |
@@ -104,18 +103,7 @@ Clone 수행 시 필요한 소스 정보는 `cloneSource`로 분리해 표현.
 - PVC 삭제 정책은 스토리지 프로비저너 정책에 영향
 - 단일 replica만 지원(HA 미지원)
 
-## 12. 확장 방향
-### 12.1 기능 확장
-- 실제 Reset 로직(테이블 truncate, DB drop 등)
-- 백업/복구 API
-- 자동 재시작(설정 변경 감지)
-
-### 12.2 API 확장
-- `backupPolicy`, `restoreSource` 추가
-- `monitoring` 설정(메트릭, 로그 수집)
-- `auth` 설정(root 외 사용자 관리)
-
-## 13. 관련 문서
+## 12. 관련 문서
 - 상세 소개: `docs/PROJECT_OVERVIEW.md`
 - 운영 가이드: `docs/OPERATIONS_GUIDE.md`
 - CRD 레퍼런스: `docs/CRD_REFERENCE.md`

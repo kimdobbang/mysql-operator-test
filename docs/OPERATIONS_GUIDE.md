@@ -2,7 +2,7 @@
 
 ## 1. 목적과 범위
 이 문서는 PoC Operator를 운영 환경 또는 테스트 클러스터에서 **설치, 운영, 업그레이드, 문제 해결**하는 데 필요한 정보를 제공합니다.
-PoC 범위이므로 일부 기능(예: Reset 동작)은 상태 기록만 수행합니다.
+Reset 동작은 대상 DB를 drop/create 하는 Job을 생성하므로, 데이터 삭제에 주의해야 합니다.
 
 ## 2. 사전 요구사항
 - Kubernetes 클러스터 (minikube 포함)
@@ -53,7 +53,7 @@ StatefulSet PodTemplate에 `mysql.sandbox/restartedAt`이 기록되며 롤링 �
 ```
 kubectl annotate mysqlinstance <name> action.mysql.sandbox/reset=truncate --overwrite
 ```
-PoC 범위에서는 실제 데이터 삭제 없이 상태에 결과만 기록합니다.
+Reset은 대상 DB를 drop/create 하는 Job을 실행하며 결과는 status에 기록됩니다.
 
 ### 4.4 Clone/Schema Clone
 `spec.initStrategy`가 `CLONE` 또는 `SCHEMA_CLONE`일 때 Clone Job이 생성됩니다.
@@ -113,8 +113,8 @@ kubectl get pvc -n <namespace>
 - RBAC 권한을 최소화하려면 `k8s/mysql-operator.yaml`를 기준으로 조정
 
 ## 9. 운영 범위 요약
-- **지원**: 단일 replica, 자동 튜닝, 재시작/리셋/클론
-- **미지원**: HA 구성, 자동 ConfigMap 반영 재시작, 실제 Reset 로직
+- **지원**: 단일 replica에 DB복제, 자동 튜닝, DB 재시작/Drop DB/DB COPY
+- **미지원**: HA 구성, 자동 ConfigMap 반영 재시작
 
 ## 10. API 문서
 - `docs/API_SPEC.md`
